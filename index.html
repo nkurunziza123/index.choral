@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Chorale St Nicolas - Full System</title>
+<style>
+body{font-family:"Segoe UI",Arial;background:#f4f6fb;margin:0;text-align:center;}
+.login{margin-top:60px;}
+input,select{padding:8px;border-radius:6px;border:1px solid #ccc;margin:4px;}
+button{padding:6px 12px;background:#1f4ed8;border:none;color:white;border-radius:6px;cursor:pointer;margin:2px;}
+button:hover{background:#163aa8;}
+.orga{display:none;padding:10px;}
+.title{font-size:22px;color:#1f4ed8;font-weight:bold;margin-bottom:20px;}
+.box{background:#1f4ed8;color:white;padding:8px 16px;border-radius:18px;display:inline-block;font-weight:bold;margin:4px;cursor:pointer;transition:0.2s;}
+.box:hover{transform:scale(1.05);background:#163aa8;}
+.modules-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;}
+.modules-grid .box{flex:0 1 140px;margin-bottom:6px;}
+table{margin:10px auto;border-collapse:collapse;width:90%;max-width:900px;}
+th,td{border:1px solid #1f4ed8;padding:6px 10px;text-align:center;}
+th{background:#1f4ed8;color:white;}
+h3{color:#1f4ed8;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login" id="login">
+<h2>🎶 Chorale St Nicolas</h2>
+<input type="password" id="pass" placeholder="Mot de passe">
+<br><br>
+<button onclick="enter()">Connexion</button>
+</div>
+
+<!-- ORGANIGRAMME & MODULES -->
+<div class="orga" id="orga">
+<div class="title">ORGANIGRAMME DE LA CHORALE</div>
+
+<div class="level">
+  <div class="box" onclick="openModule('Admin')">ADMINISTRATEUR</div>
+  <div class="box" onclick="openModule('Chef')">CHEF DE CHORALE</div>
+  <div class="box" onclick="openModule('Vice')">VICE DE CHORALE</div>
+</div>
+
+<div class="level">
+  <div class="box" onclick="openModule('Soprano')">CHEF SOPRANO</div>
+  <div class="box" onclick="openModule('Alto')">CHEF ALTO</div>
+  <div class="box" onclick="openModule('Tenor')">CHEF TENOR</div>
+  <div class="box" onclick="openModule('Bass')">CHEF BASS</div>
+</div>
+
+<div class="level modules-grid">
+  <div class="box" onclick="openModule('Appel')">APPEL DES CHORISTES</div>
+  <div class="box" onclick="openModule('Liste')">LISTE DES APPELS</div>
+  <div class="box" onclick="openModule('Finance')">FINANCE DES CHORISTES</div>
+  <div class="box" onclick="openModule('Tous')">TOUS LES CHORISTES</div>
+  <div class="box" onclick="openModule('Publication')">PUBLICATION</div>
+</div>
+
+<!-- TABLES -->
+<div id="choristesTable" style="display:none;">
+<h3>Tous les Choristes</h3>
+<table>
+<thead><tr><th>Nom</th><th>Prénom</th><th>Tel</th><th>Voix</th><th>Actions</th></tr></thead>
+<tbody id="choristesBody"></tbody>
+</table>
+<div id="choristesPagination"></div>
+</div>
+
+<div id="appelTable" style="display:none;">
+<h3>Liste des Appels</h3>
+<table>
+<thead>
+<tr>
+<th>Nom</th>
+<th>Prénom</th>
+<th>Voix</th>
+<th>Statut</th>
+<th>Mode</th>
+<th>Date</th>
+</tr>
+</thead>
+<tbody id="appelBody"></tbody>
+</table>
+<div id="appelPagination"></div>
+</div>
+
+<div id="financeTable" style="display:none;">
+<h3>Finances des Choristes</h3>
+<table>
+<thead>
+<tr><th>Nom</th><th>Prénom</th><th>Voix</th><th>Mois</th><th>Cotisation</th><th>Assistance</th><th>Actions</th></tr>
+</thead>
+<tbody id="financeBody"></tbody>
+</table>
+<div id="financePagination"></div>
+<button onclick="updateFinance()">Ajouter / Modifier Cotisation & Assistance</button>
+</div>
+
+<div style="margin:10px;">
+<button onclick="addChoriste()">Ajouter Choriste (Chefs voix)</button>
+<button onclick="faireAppel()">Faire Appel (Chefs voix)</button>
+</div>
+
+<div style="margin:10px;">
+<b>Mode:</b>
+<button onclick="setMode('Répétition')">🎤 Répétition</button>
+<button onclick="setMode('Messe')">⛪ Messe</button>
+<span id="modeLabel" style="margin-left:10px;font-weight:bold;"></span>
+</div>
+
+<h3>📅 Historique par mois</h3>
+<input type="month" id="moisHistorique">
+<button onclick="historiqueParMois()">Voir</button>
+<div id="historiqueBox"></div>
+
+<h3>📈 Taux présence messe</h3>
+<button onclick="tauxPresenceMesse()">Calculer</button>
+<div id="tauxBox"></div>
+
+<a href="https://username.github.io/chorale/" target="_blank">Visiter Chorale St Nicolas</a>
+
+
+<script>
+let currentPage=1, appelPage=1, financePage=1, itemsPerPage=10;
+let choristes=[], appelList=[], finances=[], currentRole=null, currentMode="Répétition";
+
+const roles = {
+  admin: { pass:"admin1234", type:"admin" },
+  chef: { pass:"chef1234", type:"chef" },
+  vice: { pass:"vice1234", type:"chef" },
+  soprano: { pass:"soprano123", type:"voice", voix:"Soprano" },
+  alto: { pass:"alto123", type:"voice", voix:"Alto" },
+  tenor: { pass:"tenor123", type:"voice", voix:"Tenor" },
+  bass: { pass:"bass123", type:"voice", voix:"Bass" },
+  user: { pass:"1234", type:"user" }
+};
+
+// ------------------ LOCALSTORAGE ------------------
+function loadData(){
+  choristes=JSON.parse(localStorage.getItem("choristes")||"[]");
+  appelList=JSON.parse(localStorage.getItem("appelList")||"[]");
+  finances=JSON.parse(localStorage.getItem("finances")||"[]");
+}
+function saveData(){
+  localStorage.setItem("choristes",JSON.stringify(choristes));
+  localStorage.setItem("appelList",JSON.stringify(appelList));
+  localStorage.setItem("finances",JSON.stringify(finances));
+}
+
+// ------------------ LOGIN ------------------
+function enter(){
+  let p=document.getElementById("pass").value.trim();
+  currentRole=null;
+  for(let r in roles){ if(roles[r].pass===p){ currentRole=roles[r]; break; } }
+  if(currentRole){
+    document.getElementById("login").style.display="none";
+    document.getElementById("orga").style.display="block";
+    loadData();
+    renderChoristes(); renderAppel(); renderFinance();
+    document.getElementById("modeLabel").innerText="Mode actuel: "+currentMode;
+  } else { alert("Mot de passe incorrect"); }
+}
+
+// ------------------ MODULES ------------------
+function openModule(name){
+  document.getElementById("choristesTable").style.display="none";
+  document.getElementById("appelTable").style.display="none";
+  document.getElementById("financeTable").style.display="none";
+  if(["Tous","Appel","Liste","Finance","Publication"].includes(name)){
+    if(currentRole.type==="user"){ alert("Accès refusé"); return; }
+  }
+  if(currentRole.type==="voice" && !["Appel","Liste"].includes(name)){
+    alert("Seul votre module est accessible"); return;
+  }
+  if(name==="Tous") renderChoristes();
+  if(name==="Appel"||name==="Liste") renderAppel();
+  if(name==="Finance") renderFinance();
+}
+
+// ------------------ CHORISTES ------------------
+function addChoriste(){
+  if(currentRole.type!=="voice") return;
+  let nom=prompt("Nom:"); if(!nom) return;
+  let prenom=prompt("Prénom:"); if(!prenom) return;
+  let tel=prompt("Téléphone:"); if(!tel) return;
+  choristes.push({id:Date.now(), nom, prenom, tel, voix:currentRole.voix});
+  saveData(); renderChoristes();
+  alert(`🎶 Nouveau choriste ajouté: ${nom} ${prenom} (${currentRole.voix})`);
+}
+
+function renderChoristes(){
+  let tbody=document.getElementById("choristesBody"); tbody.innerHTML="";
+  const start=(currentPage-1)*itemsPerPage;
+  choristes.slice(start,start+itemsPerPage).forEach((c,i)=>{
+    let idx=start+i;
+    let actions="—";
+    if(currentRole.type==="admin")
+      actions=`<button onclick="editChoriste(${idx})">Edit</button>
+               <button onclick="deleteChoriste(${idx})">Delete</button>`;
+    tbody.innerHTML+=`<tr>
+      <td>${c.nom}</td><td>${c.prenom}</td><td>${c.tel}</td><td>${c.voix}</td><td>${actions}</td>
+    </tr>`;
+  });
+  if(currentRole.type!=="user") document.getElementById("choristesTable").style.display="block";
+  renderChoristesPagination();
+}
+
+function editChoriste(i){ if(currentRole.type!=="admin") return;
+  let c=choristes[i]; c.nom=prompt("Nom:",c.nom)||c.nom; c.prenom=prompt("Prénom:",c.prenom)||c.prenom; c.tel=prompt("Téléphone:",c.tel)||c.tel;
+  saveData(); renderChoristes();
+}
+function deleteChoriste(i){ if(currentRole.type!=="admin") return; if(confirm("Supprimer ce choriste ?")){ choristes.splice(i,1); saveData(); renderChoristes(); } }
+
+function renderChoristesPagination(){
+  let div=document.getElementById("choristesPagination"); div.innerHTML="";
+  let pages=Math.ceil(choristes.length/itemsPerPage);
+  if(currentPage>1) div.innerHTML+=`<button onclick="currentPage--;renderChoristes()">Précédent</button>`;
+  for(let i=1;i<=pages;i++){ div.innerHTML+=i===currentPage?`<strong>${i}</strong>`:`<button onclick="currentPage=${i};renderChoristes()">${i}</button>`; }
+  if(currentPage<pages) div.innerHTML+=`<button onclick="currentPage++;renderChoristes()">Suivant</button>`;
+}
+
+// ------------------ APPEL ------------------
+function faireAppel(){
+  let choristesVoix=choristes.filter(c=>c.voix===currentRole.voix);
+  choristesVoix.forEach(c=>{
+    let statut=prompt(`Présence pour ${c.nom} ${c.prenom} (P/V/A/X)`,"P");
+    appelList.push({id:c.id, nom:c.nom, prenom:c.prenom, voix:c.voix, statut:statut, mode:currentMode, date:new Date().toLocaleDateString()});
+  });
+  saveData(); renderAppel(); alert("Appel terminé !");
+}
+
+function renderAppel(){
+  let tbody=document.getElementById("appelBody"); tbody.innerHTML="";
+  let data=currentRole.type==="voice"?appelList.filter(a=>a.voix===currentRole.voix):appelList;
+  const start=(appelPage-1)*itemsPerPage;
+  data.slice(start,start+itemsPerPage).forEach(a=>{
+    tbody.innerHTML+=`<tr>
+      <td>${a.nom}</td><td>${a.prenom}</td><td>${a.voix}</td><td>${a.statut}</td>
+      <td>${a.mode||"-"}</td><td>${a.date||"-"}</td>
+    </tr>`;
+  });
+  document.getElementById("appelTable").style.display="block";
+}
+
+// ------------------ FINANCES ------------------
+function updateFinance(){
+  if(!["chef","admin"].includes(currentRole.type)) return;
+  let nom=prompt("Nom du choriste:"); if(!nom) return;
+  let prenom=prompt("Prénom:"); if(!prenom) return;
+  let voix=currentRole.type==="voice"?currentRole.voix:prompt("Voix:"); if(!voix) return;
+  let mois=prompt("Mois (ex: Février 2026)",new Date().toLocaleString('fr-FR',{month:'long',year:'numeric'}));
+  let cot=parseInt(prompt("Montant cotisation:","0"));
+  let assist=confirm("Assistance présente? (OK=Oui/Annuler=Non)");
+  let idx=finances.findIndex(f=>f.nom===nom && f.prenom===prenom && f.voix===voix && f.mois===mois);
+  if(idx>=0){ finances[idx].cotisation=cot; finances[idx].assistance=assist; }
+  else{ finances.push({nom,prenom,voix,mois,cotisation:cot,assistance:assist}); }
+  saveData(); renderFinance(); alert(`💰 Cotisation ajoutée: ${nom} ${prenom} - ${cot} FBu`);
+}
+
+function renderFinance(){
+  let tbody=document.getElementById("financeBody"); tbody.innerHTML="";
+  const start=(financePage-1)*itemsPerPage;
+  finances.slice(start,start+itemsPerPage).forEach((f,i)=>{
+    let actions="—";
+    if(currentRole.type==="admin") actions=`<button onclick="editFinance(${i})">Edit</button><button onclick="deleteFinance(${i})">Delete</button>`;
+    tbody.innerHTML+=`<tr><td>${f.nom}</td><td>${f.prenom}</td><td>${f.voix}</td><td>${f.mois}</td><td>${f.cotisation}</td><td>${f.assistance?"Oui":"Non"}</td><td>${actions}</td></tr>`;
+  });
+  document.getElementById("financeTable").style.display="block";
+}
+
+// ------------------ MODE ------------------
+function setMode(mode){ currentMode=mode; document.getElementById("modeLabel").innerText="Mode actuel: "+mode; }
+
+// ------------------ HISTORIQUE & TAUX ------------------
+function historiqueParMois(){
+  const mois=document.getElementById("moisHistorique").value;
+  const box=document.getElementById("historiqueBox");
+  if(!mois){ box.innerHTML="Choisir un mois"; return; }
+  const filtered=appelList.filter(a=>a.date.startsWith(mois));
+  let html=`<table border="1" style="border-collapse:collapse;width:100%;">`;
+  html+=`<tr><th>Nom</th><th>Voix</th><th>Statut</th><th>Date</th></tr>`;
+  filtered.forEach(a=>{ html+=`<tr><td>${a.nom}</td><td>${a.voix}</td><td>${a.statut}</td><td>${a.date}</td></tr>`; });
+  html+="</table>"; box.innerHTML=html;
+}
+
+function tauxPresenceMesse(){
+  const box=document.getElementById("tauxBox");
+  const appelsMesse=appelList.filter(a=>a.mode==="Messe");
+  if(appelsMesse.length===0){ box.innerHTML="Aucune messe enregistrée"; return; }
+  let stats={};
+  appelsMesse.forEach(a=>{
+    stats[a.nom]=stats[a.nom]||{present:0,total:0};
+    stats[a.nom].total++;
+    if(a.statut==="P") stats[a.nom].present++;
+  });
+  let html=`<table border="1" style="border-collapse:collapse;width:70%;">`;
+  html+=`<tr><th>Nom</th><th>Taux présence</th></tr>`;
+  for(let nom in stats){ let taux=Math.round((stats[nom].present/stats[nom].total)*100); html+=`<tr><td>${nom}</td><td>${taux}%</td></tr>`; }
+  html+="</table>"; box.innerHTML=html;
+}
+</script>
+
+</body>
+</html>
